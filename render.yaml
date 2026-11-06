@@ -2,7 +2,7 @@
 # Los valores con sync: false se piden en el panel al crear el servicio (copiarlos de .env.production).
 services:
   - type: web
-    name: mrblack-barberia
+    name: mrblack-diego
     runtime: docker
     dockerfilePath: ./Dockerfile.render
     plan: free
