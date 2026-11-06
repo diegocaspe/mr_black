@@ -53,7 +53,7 @@ class Settings(BaseSettings):
     login_window_minutes: int = 15
 
     # Correo
-    email_backend: str = "smtp"  # smtp | console
+    email_backend: str = "smtp"  # smtp | console | google_script
     smtp_host: str = "localhost"
     smtp_port: int = 1025
     smtp_user: str = ""
@@ -62,6 +62,14 @@ class Settings(BaseSettings):
     smtp_use_ssl: bool = False
     smtp_from: str = "Mr Black Barbería <no-reply@mrblack.pe>"
     notify_email: str = ""  # bandeja del negocio que recibe un aviso por cada cita nueva (vacío: sin aviso)
+    # EMAIL_BACKEND=google_script: aplicación web de Google Apps Script que envía desde Gmail por HTTPS
+    # (para hostings que bloquean el puerto SMTP). El token la protege de envíos ajenos.
+    google_script_url: str = ""
+    google_script_token: str = ""
+
+    # Recordatorio por correo y campana X minutos antes de cada cita (tarea en segundo plano).
+    reminders_enabled: bool = False
+    reminder_minutes: int = Field(10, ge=1, le=240)
 
     # Google Calendar (opcional)
     google_client_id: str = ""

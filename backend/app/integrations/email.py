@@ -3,8 +3,10 @@
 `get_email_sender()` devuelve la implementación según EMAIL_BACKEND:
 - smtp    → SMTPEmailSender (STARTTLS/SSL opcional, credenciales desde .env)
 - console → ConsoleEmailSender (escribe en el log; útil sin servidor SMTP)
+- google_script → GoogleScriptEmailSender (HTTPS a Google Apps Script; para hostings sin SMTP)
 """
 
+import base64
 import logging
 import smtplib
 import ssl
@@ -13,6 +15,8 @@ from email.message import EmailMessage
 from email.utils import make_msgid
 from html import escape
 from typing import Protocol
+
+import httpx
 
 from app.core.config import get_settings
 
@@ -76,8 +80,49 @@ class ConsoleEmailSender:
         logger.info("[EMAIL console] Para: %s | Asunto: %s\n%s", email.to, email.subject, email.text)
 
 
+class GoogleScriptEmailSender:
+    """Envía por HTTPS a una aplicación web de Google Apps Script que reenvía desde Gmail.
+
+    Apps Script responde al POST con una redirección 302 hacia el resultado: se sigue la
+    redirección y se exige {"ok": true}. Cualquier otra respuesta lanza una excepción, que
+    send_email_task registra como ERROR en el log de correos."""
+
+    TIMEOUT = 30.0
+
+    def send(self, email: OutgoingEmail) -> None:
+        s = get_settings()
+        if not s.google_script_url or not s.google_script_token:
+            raise RuntimeError("Faltan GOOGLE_SCRIPT_URL o GOOGLE_SCRIPT_TOKEN para EMAIL_BACKEND=google_script.")
+        payload = {
+            "token": s.google_script_token,
+            "to": email.to,
+            "subject": email.subject,
+            "html": email.html,
+            "text": email.text,
+            "fromName": s.app_name,
+            "attachments": [
+                {"filename": a.filename, "mimeType": a.mime_type, "content": base64.b64encode(a.content).decode("ascii")}
+                for a in email.attachments
+            ],
+        }
+        response = httpx.post(s.google_script_url, json=payload, follow_redirects=True, timeout=self.TIMEOUT)
+        try:
+            data = response.json()
+        except ValueError:
+            data = None
+        if isinstance(data, dict) and data.get("ok") is True:
+            return
+        detail = data.get("error") if isinstance(data, dict) else response.text[:200]
+        raise RuntimeError(f"Google Apps Script respondió HTTP {response.status_code}: {detail or 'sin detalle'}")
+
+
 def get_email_sender() -> EmailSender:
-    return ConsoleEmailSender() if get_settings().email_backend == "console" else SMTPEmailSender()
+    backend = get_settings().email_backend.strip().lower()
+    if backend == "console":
+        return ConsoleEmailSender()
+    if backend == "google_script":
+        return GoogleScriptEmailSender()
+    return SMTPEmailSender()
 
 
 # ---------------------------------------------------------------- plantillas

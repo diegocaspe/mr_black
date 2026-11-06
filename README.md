@@ -73,9 +73,20 @@ Se crean con el seed. **No se muestran en ninguna pantalla.** Todos usan la cont
 |---|---|---|
 | ADMIN | `admin` | Administrador principal (protegido: no se puede desactivar ni degradar) |
 | CAJA | `caja` | |
-| BARBERO | `barbero1` | Diego C (lun–sáb 09:00–19:30, descanso 13:00–14:00) |
-| BARBERO | `barbero2` | Marco Style (valoración 4.5) |
-| BARBERO | `barbero3` | Luis Fade (no disponible para reservas) |
+| BARBERO | `barbero1` | Adriano Vargas (4.9 · Corte, Barba, Corte + Barba, Cejas) |
+| BARBERO | `barbero2` | Alexander Huamán (4.7 · Corte, Barba, Corte + Barba) |
+| BARBERO | `barbero3` | Luis Quispe (4.6 · Corte, Corte + Barba, Cejas) |
+| BARBERO | `barbero4` | Jhonatan Rojas (4.5 · Barba, Corte + Barba, Cejas) |
+
+Los 4 barberos atienden lun–sáb 09:00–19:30 con descanso 13:00–14:00; sus fotos están en
+`frontend/assets/barberos/` (créditos en `docs/CREDITOS_FOTOS.md`). En una base que ya tiene datos
+(el seed no vuelve a ejecutarse) se aplican con:
+
+```bash
+DATABASE_URL='postgresql://…' python -m app.update_demo_barbers
+```
+
+Es idempotente y no toca citas ni ventas: actualiza `barbero1`–`barbero3` y crea `barbero4` si falta.
 | CLIENTE | `987654321` | Carlos Mendoza (también inicia sesión con `carlos.mendoza@example.com`) |
 | CLIENTE | `999888777` | Andrea Torres |
 
@@ -195,6 +206,31 @@ cita nueva con los datos del cliente. Para producción, configura `SMTP_*` (por 
 aplicación: `smtp.gmail.com:587`, `SMTP_USE_TLS=true`). Con `EMAIL_BACKEND=console` los correos
 solo se escriben en el log. Los envíos son asíncronos: un fallo de SMTP no revierte la operación
 y queda registrado en *Auditoría → Correos enviados*.
+
+### Correo con Google Apps Script (hostings sin SMTP)
+
+Algunos planes (p. ej. Railway) bloquean los puertos SMTP. Con `EMAIL_BACKEND=google_script` la
+API envía cada correo por HTTPS a una aplicación web de Google Apps Script que lo reenvía desde tu Gmail:
+
+| Variable | Valor |
+|---|---|
+| `EMAIL_BACKEND` | `google_script` |
+| `GOOGLE_SCRIPT_URL` | URL de la implementación (*Implementar → Aplicación web*), termina en `/exec` |
+| `GOOGLE_SCRIPT_TOKEN` | El mismo token secreto que valida el script |
+
+La API hace un `POST` con JSON `{token, to, subject, html, text, fromName, attachments}` (los PDF
+de los comprobantes van en base64 en `attachments[].content`), sigue la redirección 302 de Apps
+Script (tiempo máximo 30 s) y exige la respuesta `{"ok": true}`. Cualquier otra respuesta queda
+como ERROR en *Auditoría → Correos enviados*, con el mensaje que devolvió el script.
+
+### Recordatorio antes de la cita
+
+Con `REMINDERS_ENABLED=true` la API revisa cada 60 s las citas pendientes o confirmadas que empiezan
+dentro de `REMINDER_MINUTES` minutos (10 por defecto) y envía al cliente el correo *"Tu cita en Mr
+Black empieza en 10 minutos"* (servicio, barbero y hora en America/Lima), además de un aviso en la
+campana del cliente y del barbero. Cada cita se marca en `appointments.reminder_sent_at` con
+`FOR UPDATE SKIP LOCKED`, así que con varios procesos el recordatorio sale una sola vez. Al
+reprogramar una cita se vuelve a enviar para la nueva hora.
 
 ## Google Calendar (opcional)
 

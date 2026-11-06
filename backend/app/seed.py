@@ -22,7 +22,6 @@ from app.models import (
     Appointment,
     AppointmentStatusHistory,
     Barber,
-    BarberSchedule,
     Client,
     InventoryMovement,
     Payment,
@@ -35,6 +34,7 @@ from app.models import (
     Service,
     User,
 )
+from app.update_demo_barbers import DEMO_BARBERS, apply_profile
 
 log = logging.getLogger("seed")
 
@@ -87,27 +87,17 @@ def run() -> None:
         db.add_all(services.values())
         db.flush()
 
-        # ---------------- barberos + horarios
-        def barber(username, name, rating, available, photo, svc_keys, days, description):
-            u = user(username, name, "BARBERO", f"{username}@example.com")
-            b = Barber(user_id=u.id, full_name=name, rating=Decimal(rating), is_available=available,
-                       photo_url=photo, description=description)
-            b.services = [services[k] for k in svc_keys]
+        # ---------------- barberos + horarios (mismos datos que aplica app/update_demo_barbers.py)
+        services_by_name = {s.name: s for s in services.values()}
+        team = {}
+        for data in DEMO_BARBERS:
+            u = user(data["username"], data["full_name"], "BARBERO", f"{data['username']}@example.com")
+            b = Barber(user_id=u.id, full_name=data["full_name"], rating=Decimal(data["rating"]))
             db.add(b)
             db.flush()
-            for wd in days:
-                db.add(BarberSchedule(barber_id=b.id, weekday=wd, start_time=time(9), end_time=time(19, 30),
-                                      break_start=time(13), break_end=time(14)))
-            return b
-
-        diego = barber("barbero1", "Diego C", "4.9", True, "https://i.pravatar.cc/320?img=12",
-                       ["corte", "barba", "combo", "cejas"], range(0, 6),
-                       "Especialista en fades y diseños clásicos. 8 años de experiencia.")
-        marco = barber("barbero2", "Marco Style", "4.5", True, "https://i.pravatar.cc/320?img=33",
-                       ["corte", "barba", "combo"], range(0, 6),
-                       "Cortes modernos y perfilado de barba con navaja.")
-        luis = barber("barbero3", "Luis Fade", "4.2", False, "https://i.pravatar.cc/320?img=52",
-                      ["corte", "cejas"], range(1, 6), "Fades de alta precisión y perfilado de cejas.")
+            apply_profile(db, b, data, services_by_name)
+            team[data["username"]] = b
+        adriano, alexander, luis = team["barbero1"], team["barbero2"], team["barbero3"]
 
         # ---------------- clientes (con y sin cuenta)
         def client(name, phone, email, with_account=True, days_ago=0):
@@ -171,12 +161,12 @@ def run() -> None:
                                                 note="Cancelada por el cliente", changed_by=created_by))
             return a
 
-        a1 = appt(carlos, diego, "corte", -3, 10, 0, "ATENDIDA", carlos.user_id)
-        appt(carlos, marco, "combo", 1, 16, 0, "CONFIRMADA", carlos.user_id)
-        appt(andrea, diego, "barba", 2, 11, 30, "PENDIENTE", andrea.user_id)
-        a4 = appt(jose, marco, "corte", -7, 15, 0, "ATENDIDA", caja.id)
+        a1 = appt(carlos, adriano, "corte", -3, 10, 0, "ATENDIDA", carlos.user_id)
+        appt(carlos, alexander, "combo", 1, 16, 0, "CONFIRMADA", carlos.user_id)
+        appt(andrea, adriano, "barba", 2, 11, 30, "PENDIENTE", andrea.user_id)
+        a4 = appt(jose, alexander, "corte", -7, 15, 0, "ATENDIDA", caja.id)
         appt(andrea, luis, "cejas", -1, 17, 0, "CANCELADA", andrea.user_id)
-        appt(jose, diego, "combo", -2, 9, 0, "ATENDIDA", caja.id)  # atendida y aún sin cobrar
+        appt(jose, adriano, "combo", -2, 9, 0, "ATENDIDA", caja.id)  # atendida y aún sin cobrar
 
         # ---------------- ventas históricas con pago y comprobante
         def sale(c, lines, method, days_ago, channel="MOSTRADOR", appointment=None):
@@ -204,8 +194,8 @@ def run() -> None:
         sale(carlos, [("p", products["Gel Mr Black"], 1, "18.00", "Gel Mr Black")], "EFECTIVO", 3)
         sale(andrea, [("p", products["Shampoo Premium"], 2, "28.00", "Shampoo Premium")], "ONLINE", 8, "ONLINE")
         sale(jose, [("p", products["Cera Matte"], 1, "24.00", "Cera Matte")], "YAPE", 2)
-        sale(carlos, [("s", services["corte"], 1, "35.00", "Corte · Diego C")], "PLIN", 3, appointment=a1)
-        sale(jose, [("s", services["corte"], 1, "35.00", "Corte · Marco Style")], "EFECTIVO", 7, appointment=a4)
+        sale(carlos, [("s", services["corte"], 1, "35.00", "Corte · Adriano Vargas")], "PLIN", 3, appointment=a1)
+        sale(jose, [("s", services["corte"], 1, "35.00", "Corte · Alexander Huamán")], "EFECTIVO", 7, appointment=a4)
 
         db.commit()
         log.info("Datos de desarrollo cargados correctamente.")

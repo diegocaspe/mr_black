@@ -78,7 +78,7 @@ def main():
         check("Página pública carga servicios, barberos y productos desde la API", public_loads)
 
         def stars_exact():
-            card = page.locator(".barber-card", has_text="Marco Style")
+            card = page.locator(".barber-card", has_text="Jhonatan Rojas")
             width = card.locator(".stars-fill").evaluate("e => e.style.width")
             assert width == "90%", width
             assert card.locator(".rating-label").inner_text() == "4.5"
@@ -138,7 +138,7 @@ def main():
 
         def book_appointment():
             page.click("[data-service] >> text=Barba")
-            page.click("[data-barber] >> text=Diego C")
+            page.click("[data-barber] >> text=Adriano Vargas")
             d = future_weekday(2)
             page.fill("#bk-date", d.isoformat())
             page.dispatch_event("#bk-date", "change")
@@ -295,18 +295,18 @@ def main():
         def barber_edit_persists():
             page.goto(f"{BASE}/app.html#/barberos")
             page.wait_for_selector("[data-edit]")
-            page.locator("article", has_text="Luis Fade").locator("[data-edit]").click()
+            page.locator("article", has_text="Luis Quispe").locator("[data-edit]").click()
             page.wait_for_selector(".modal #bf-rating")
-            page.fill("#bf-rating", "4.6")
+            page.fill("#bf-rating", "4.8")
             page.fill("#bf-name", "Luis 999$$")
             page.click(".modal button[type=submit]")
             expect(page.locator("#bf-name-error")).to_be_visible()
-            page.fill("#bf-name", "Luis Fade")
+            page.fill("#bf-name", "Luis Quispe")
             page.click(".modal button[type=submit]")
             expect(page.locator(".toast.ok", has_text="guardado")).to_be_visible(timeout=10000)
             page.reload()
             page.wait_for_selector("[data-edit]")
-            expect(page.locator("article", has_text="Luis Fade").locator(".rating-label")).to_have_text("4.6")
+            expect(page.locator("article", has_text="Luis Quispe").locator(".rating-label")).to_have_text("4.8")
 
         check("0024802/0024794/0024829 edición de barbero valida y persiste tras recargar", barber_edit_persists)
 

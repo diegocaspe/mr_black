@@ -148,7 +148,7 @@ def caja(as_user):
 
 @pytest.fixture
 def barbero(as_user):
-    return as_user("barbero1")  # Diego C (barber_id=1)
+    return as_user("barbero1")  # Adriano Vargas (barber_id=1)
 
 
 @pytest.fixture

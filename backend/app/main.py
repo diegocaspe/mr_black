@@ -1,4 +1,7 @@
+import asyncio
+import contextlib
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,7 +18,24 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
 )
 
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Tareas de fondo ligadas a la vida del proceso (REMINDERS_ENABLED=true)."""
+    task = None
+    if settings.reminders_enabled:
+        from app.services.reminder_service import reminder_loop
+
+        task = asyncio.create_task(reminder_loop())
+    yield
+    if task:
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+
+
 app = FastAPI(
+    lifespan=lifespan,
     title="Mr Black Barbería API",
     version="1.0.0",
     description=(

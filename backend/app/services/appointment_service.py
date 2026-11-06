@@ -443,6 +443,7 @@ def reschedule(
     old_start, old_barber = a.start_at, a.barber
     old_day, old_hour = _fmt(a)
     a.start_at, a.end_at, a.barber_id = start, end, barber.id
+    a.reminder_sent_at = None  # el recordatorio corresponde a la nueva hora
     _flush_or_slot_taken(db)
     db.refresh(a)
     new_day, new_hour = _fmt(a)

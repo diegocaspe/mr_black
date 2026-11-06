@@ -11,6 +11,7 @@ from sqlalchemy import (
     Numeric,
     String,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -52,6 +53,9 @@ class Appointment(TimestampMixin, Base):
         Index("ix_appointments_barber_start", "barber_id", "start_at"),
         Index("ix_appointments_client_start", "client_id", "start_at"),
         Index("ix_appointments_status", "status"),
+        # Citas activas aún sin recordatorio (consulta de reminder_service cada minuto).
+        Index("ix_appointments_reminder_due", "start_at",
+              postgresql_where=text("reminder_sent_at IS NULL AND status IN ('PENDIENTE', 'CONFIRMADA')")),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)

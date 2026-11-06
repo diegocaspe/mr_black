@@ -44,6 +44,9 @@ def test_sunday_is_not_working(anon):
 
 
 def test_unavailable_barber_and_service_not_offered(anon, wed):
+    # Todos los barberos del seed atienden: se pausa uno para comprobar el rechazo.
+    with engine.begin() as conn:
+        conn.execute(text("UPDATE barbers SET is_available = false WHERE id = 3"))
     assert anon.get("/api/availability", params={"barber_id": 3, "service_id": 1, "date": wed.isoformat()}).status_code == 400
     assert anon.get("/api/availability", params={"barber_id": 2, "service_id": 4, "date": wed.isoformat()}).status_code == 400
 
