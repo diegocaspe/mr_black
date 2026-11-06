@@ -1,0 +1,23 @@
+# Secretos
+.env
+.env.*
+!.env.example
+!.env.production.example
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+*.egg-info/
+
+# Editor / SO
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+graphify-out/

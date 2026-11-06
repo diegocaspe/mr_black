@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Crear cuenta | Mr Black</title>
+  <meta name="description" content="Regístrate en Mr Black Barbería para reservar citas y comprar productos.">
+  <meta name="theme-color" content="#0D0D0D">
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Manrope:wght@400;500;600;700;800&display=swap">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
+  <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+  <main class="auth-split" id="main">
+    <aside class="auth-visual v-register" aria-hidden="true">
+      <span class="brand-mark">MB</span>
+      <div class="auth-quote">
+        <p>Cada detalle,<br><em>a tu medida.</em></p>
+        <p>Reserva tus citas, compra productos y consulta tu historial.</p>
+      </div>
+    </aside>
+    <section class="auth-panel">
+      <div class="panel auth-card wide">
+        <div class="flex justify-between items-center">
+          <a class="brand" href="/index.html" aria-label="Mr Black, ir al inicio">
+            <span class="brand-mark">MB</span>
+            <span><span class="brand-name">MR BLACK</span><br><span class="brand-sub">BARBER SHOP</span></span>
+          </a>
+          <a href="/index.html" class="btn btn-ghost btn-sm"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i> Inicio</a>
+        </div>
+        <div class="mt-8">
+          <div class="eyebrow">Cliente</div>
+          <h1>Crear cuenta</h1>
+          <p class="muted mt-2">Reserva tus citas, compra productos y consulta tu historial.</p>
+        </div>
+        <form id="register-form" class="mt-6 form-grid" novalidate>
+          <div class="field full">
+            <label for="full_name">Nombre completo <span class="req" aria-hidden="true">*</span></label>
+            <input id="full_name" name="full_name" class="input" autocomplete="name" maxlength="60" required>
+            <p class="field-hint">Solo letras y espacios (se permiten tildes y ñ).</p>
+          </div>
+          <div class="field">
+            <label for="phone">Teléfono celular <span class="req" aria-hidden="true">*</span></label>
+            <input id="phone" name="phone" class="input" inputmode="tel" autocomplete="tel" maxlength="15" placeholder="9XXXXXXXX" required>
+            <p class="field-hint">9 dígitos, empieza con 9. Será tu usuario.</p>
+          </div>
+          <div class="field">
+            <label for="email">Correo electrónico <span class="req" aria-hidden="true">*</span></label>
+            <input id="email" name="email" type="email" class="input" autocomplete="email" maxlength="120" required>
+            <p class="field-hint">Para confirmaciones y recuperar tu contraseña.</p>
+          </div>
+          <div class="field">
+            <label for="password">Contraseña <span class="req" aria-hidden="true">*</span></label>
+            <div class="input-group">
+              <input id="password" name="password" type="password" class="input" autocomplete="new-password" maxlength="128" required>
+              <button type="button" class="icon-btn" data-toggle-password="password" aria-label="Mostrar contraseña"><i class="fa-solid fa-eye"></i></button>
+            </div>
+            <div class="strength" id="strength" data-score="0" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
+            <p class="field-hint" id="strength-label" aria-live="polite">Mínimo 8 caracteres con letras y números.</p>
+          </div>
+          <div class="field">
+            <label for="password_confirm">Confirmar contraseña <span class="req" aria-hidden="true">*</span></label>
+            <input id="password_confirm" name="password_confirm" type="password" class="input" autocomplete="new-password" maxlength="128" required>
+          </div>
+          <div class="full">
+            <button type="submit" class="btn btn-gold btn-block"><i class="fa-solid fa-user-plus" aria-hidden="true"></i> Crear cuenta</button>
+          </div>
+        </form>
+        <p class="auth-foot">¿Ya tienes cuenta? <a href="/login.html">Inicia sesión</a></p>
+      </div>
+    </section>
+  </main>
+  <script type="module" src="/js/auth.js"></script>
+</body>
+</html>

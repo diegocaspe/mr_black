@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Recuperar contraseña | Mr Black</title>
+  <meta name="theme-color" content="#0D0D0D">
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Manrope:wght@400;500;600;700;800&display=swap">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
+  <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+  <main class="auth-split" id="main">
+    <aside class="auth-visual v-recover" aria-hidden="true">
+      <span class="brand-mark">MB</span>
+      <div class="auth-quote">
+        <p>De vuelta<br><em>en la silla.</em></p>
+        <p>Te enviaremos un enlace temporal para crear una nueva contraseña.</p>
+      </div>
+    </aside>
+    <section class="auth-panel">
+      <div class="panel auth-card">
+        <a class="brand" href="/index.html" aria-label="Mr Black, ir al inicio">
+          <span class="brand-mark">MB</span>
+          <span><span class="brand-name">MR BLACK</span><br><span class="brand-sub">BARBER SHOP</span></span>
+        </a>
+        <div class="mt-8">
+          <div class="eyebrow">Recuperación</div>
+          <h1>¿Olvidaste tu contraseña?</h1>
+          <p class="muted mt-2">Ingresa el correo de tu cuenta y te enviaremos un enlace temporal para crear una nueva.</p>
+        </div>
+        <div id="forgot-done" class="form-alert ok mt-6" role="status" hidden>
+          <i class="fa-solid fa-envelope-circle-check" aria-hidden="true"></i>
+          <div>Si el correo está registrado, recibirás un enlace válido por 30 minutos. Revisa también tu carpeta de spam.</div>
+        </div>
+        <form id="forgot-form" class="mt-6 grid" novalidate>
+          <div class="field">
+            <label for="email">Correo electrónico <span class="req" aria-hidden="true">*</span></label>
+            <input id="email" name="email" type="email" class="input" autocomplete="email" maxlength="120" required autofocus>
+          </div>
+          <button type="submit" class="btn btn-gold btn-block"><i class="fa-solid fa-paper-plane" aria-hidden="true"></i> Enviar enlace</button>
+        </form>
+        <p class="auth-foot"><a href="/login.html"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i> Volver a iniciar sesión</a></p>
+      </div>
+    </section>
+  </main>
+  <script type="module" src="/js/auth.js"></script>
+</body>
+</html>

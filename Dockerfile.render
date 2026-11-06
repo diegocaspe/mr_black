@@ -1,0 +1,32 @@
+# Imagen única para Render (plan gratuito): nginx sirve el frontend y hace proxy a la API FastAPI,
+# ambos en el mismo contenedor. La base de datos es PostgreSQL en Neon (DATABASE_URL).
+FROM python:3.12-slim
+
+# MALLOC_ARENA_MAX: glibc crea una arena de memoria por hilo y retiene la RAM de cada hash Argon2;
+# sin este límite cada proceso de la API crece hasta ~1 GB bajo carga.
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    MALLOC_ARENA_MAX=2
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends nginx \
+    && rm -rf /var/lib/apt/lists/* /etc/nginx/sites-enabled/default
+
+# Debian trae 768 conexiones por proceso de nginx: insuficiente para miles de visitantes.
+RUN sed -i -E 's/worker_connections\s+[0-9]+;/worker_connections 4096;/' /etc/nginx/nginx.conf \
+    && sed -i '1i worker_rlimit_nofile 16384;' /etc/nginx/nginx.conf
+
+WORKDIR /app
+COPY backend/requirements.txt ./
+RUN pip install -r requirements.txt
+
+COPY backend/ ./
+COPY frontend/ /usr/share/nginx/html/
+RUN rm -rf /usr/share/nginx/html/graphify-out
+COPY docker/render/nginx.conf.template /etc/nginx/render.conf.template
+COPY docker/render/start.sh /start.sh
+RUN chmod +x /start.sh
+
+CMD ["/start.sh"]

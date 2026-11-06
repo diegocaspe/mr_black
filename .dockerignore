@@ -1,0 +1,17 @@
+.env
+.env.*
+!.env.example
+.git
+.gitignore
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.venv
+**/venv
+**/node_modules
+docs/
+barberia0.3.html
+*.log
+.vscode
+.idea
+**/graphify-out

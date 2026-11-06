@@ -1,0 +1,97 @@
+# Variante de un solo contenedor para Render: nginx escucha en $PORT y la API corre en 127.0.0.1:8000.
+map $http_x_forwarded_for $client_ip {
+    default $remote_addr;
+    "~(?:^|,)\s*(?<last>[^,\s]+)\s*$" $last;
+}
+
+# Conexiones persistentes hacia la API: evita abrir una conexión TCP nueva por cada petición.
+upstream api {
+    server 127.0.0.1:8000;
+    keepalive 64;
+    keepalive_timeout 60s;
+}
+
+# Caché breve (microcaché) de las consultas públicas y de las fotos, para que miles de visitantes
+# anónimos no lleguen todos a la API y a la base de datos.
+proxy_cache_path /tmp/nginx-cache levels=1:2 keys_zone=api_cache:10m max_size=200m inactive=7d use_temp_path=off;
+
+server {
+    listen __PORT__;
+    server_name _;
+    root /usr/share/nginx/html;
+    index index.html;
+    server_tokens off;
+    client_max_body_size 2m;
+
+    # Cabeceras de seguridad para el frontend.
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
+    add_header Content-Security-Policy "default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: https:; connect-src 'self'; frame-src 'self'; frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'" always;
+
+    gzip on;
+    gzip_types text/css application/javascript application/json image/svg+xml;
+
+    proxy_http_version 1.1;
+    proxy_set_header Connection "";
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    # Detrás del proxy de Render: se reenvía solo la última IP de X-Forwarded-For (la que añade
+    # Render), no las que pudiera inventar el cliente, para el rate limiting y la auditoría.
+    proxy_set_header X-Forwarded-For $client_ip;
+    proxy_set_header X-Forwarded-Proto https;
+    proxy_read_timeout 60s;
+
+    # Fotos de productos y servicios: inmutables (un cambio crea un id nuevo).
+    location ~ ^/api/(product|service)-images/[0-9]+$ {
+        proxy_pass http://api;
+        proxy_cache api_cache;
+        proxy_cache_valid 200 7d;
+        proxy_cache_lock on;
+        proxy_cache_use_stale error timeout updating;
+    }
+
+    # Catálogo público y disponibilidad: 5 s de caché solo para visitantes sin sesión. Con sesión
+    # (cookie mb_session) la petición va siempre a la API, porque la respuesta puede depender del rol.
+    location ~ ^/api/(services|barbers|products|categories|settings/public|payments/methods|availability)(/[0-9]+)?$ {
+        proxy_pass http://api;
+        proxy_cache api_cache;
+        proxy_cache_methods GET HEAD;
+        proxy_cache_key $request_uri;
+        proxy_cache_valid 200 5s;
+        proxy_cache_bypass $cookie_mb_session;
+        proxy_no_cache $cookie_mb_session;
+        proxy_ignore_headers Cache-Control Expires;
+        proxy_cache_lock on;
+        proxy_cache_use_stale error timeout updating;
+    }
+
+    # Sin cookie de sesión la respuesta es siempre null: nginx contesta sin llegar a la API
+    # (cada página la consulta al cargar).
+    location = /api/auth/session {
+        default_type application/json;
+        if ($cookie_mb_session = "") {
+            add_header Cache-Control "no-store" always;
+            add_header X-Content-Type-Options "nosniff" always;
+            return 200 "null";
+        }
+        proxy_pass http://api;
+    }
+
+    location /api/ {
+        proxy_pass http://api;
+    }
+
+    location ~* \.(css|js|svg|png|jpg|jpeg|webp|ico)$ {
+        expires 1h;
+        add_header Cache-Control "public";
+        add_header X-Content-Type-Options "nosniff" always;
+    }
+
+    location / {
+        try_files $uri $uri/ =404;
+    }
+
+    error_page 404 /404.html;
+}

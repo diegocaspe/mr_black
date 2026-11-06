@@ -1,0 +1,57 @@
+# Blueprint de Render (plan gratuito). Render → New → Blueprint → elegir este repositorio.
+# Los valores con sync: false se piden en el panel al crear el servicio (copiarlos de .env.production).
+services:
+  - type: web
+    name: mrblack-barberia
+    runtime: docker
+    dockerfilePath: ./Dockerfile.render
+    plan: free
+    region: oregon
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: "false"
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: SEED_ON_START
+        value: "false"
+      - key: APP_TIMEZONE
+        value: America/Lima
+      # Capacidad: procesos de la API y conexiones por proceso. Conexiones a Neon =
+      # WEB_CONCURRENCY x (DB_POOL_SIZE + DB_MAX_OVERFLOW). En el plan free (0.1 CPU, 512 MB) dejar 1;
+      # con 1 CPU / 2 GB usar 2, con 2 CPU / 4 GB usar 4.
+      - key: WEB_CONCURRENCY
+        value: "1"
+      - key: DB_POOL_SIZE
+        value: "10"
+      - key: DB_MAX_OVERFLOW
+        value: "10"
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+      - key: JWT_SECRET
+        generateValue: true
+      - key: FRONTEND_URL
+        sync: false
+      - key: EMAIL_BACKEND
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: SMTP_USE_TLS
+        sync: false
+      - key: SMTP_USE_SSL
+        sync: false
+      - key: SMTP_FROM
+        sync: false
+      - key: NOTIFY_EMAIL
+        sync: false

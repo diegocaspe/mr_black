@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Iniciar sesión | Mr Black</title>
+  <meta name="description" content="Accede a tu cuenta de Mr Black Barbería.">
+  <meta name="theme-color" content="#0D0D0D">
+  <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Manrope:wght@400;500;600;700;800&display=swap">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
+  <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+  <main class="auth-split" id="main">
+    <aside class="auth-visual v-login" aria-hidden="true">
+      <span class="brand-mark">MB</span>
+      <div class="auth-quote">
+        <p>Tu estilo,<br><em>nuestra pasión.</em></p>
+        <p>Cortes precisos, barba impecable y una experiencia diseñada para quienes cuidan cada detalle.</p>
+      </div>
+    </aside>
+    <section class="auth-panel">
+      <div class="panel auth-card">
+        <div class="flex justify-between items-center">
+          <a class="brand" href="/index.html" aria-label="Mr Black, ir al inicio">
+            <span class="brand-mark">MB</span>
+            <span><span class="brand-name">MR BLACK</span><br><span class="brand-sub">BARBER SHOP</span></span>
+          </a>
+          <a href="/index.html" class="btn btn-ghost btn-sm"><i class="fa-solid fa-arrow-left" aria-hidden="true"></i> Inicio</a>
+        </div>
+        <div class="mt-8">
+          <div class="eyebrow">Bienvenido</div>
+          <h1>Iniciar sesión</h1>
+          <p class="muted mt-2">Ingresa con tu usuario, teléfono o correo electrónico.</p>
+        </div>
+        <form id="login-form" class="mt-6 grid" novalidate>
+          <div class="field">
+            <label for="identifier">Usuario, teléfono o correo <span class="req" aria-hidden="true">*</span></label>
+            <input id="identifier" name="identifier" class="input" autocomplete="username" maxlength="120" required autofocus>
+          </div>
+          <div class="field">
+            <div class="flex justify-between items-center">
+              <label for="password">Contraseña <span class="req" aria-hidden="true">*</span></label>
+              <a href="/recuperar.html" class="small">¿Olvidaste tu contraseña?</a>
+            </div>
+            <div class="input-group">
+              <input id="password" name="password" type="password" class="input" autocomplete="current-password" maxlength="128" required>
+              <button type="button" class="icon-btn" data-toggle-password="password" aria-label="Mostrar contraseña"><i class="fa-solid fa-eye"></i></button>
+            </div>
+          </div>
+          <button type="submit" class="btn btn-gold btn-block mt-2"><i class="fa-solid fa-right-to-bracket" aria-hidden="true"></i> Ingresar</button>
+        </form>
+        <p class="auth-foot">¿Aún no tienes cuenta? <a href="/registro.html">Regístrate como cliente</a></p>
+      </div>
+    </section>
+  </main>
+  <script type="module" src="/js/auth.js"></script>
+</body>
+</html>
