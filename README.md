@@ -93,8 +93,8 @@ Es idempotente y no toca citas ni ventas: actualiza `barbero1`–`barbero3` y cr
 El seed también crea un cliente sin cuenta (José Ramírez), 4 servicios, 6 productos (uno dado
 de baja y uno con stock bajo), citas y ventas de ejemplo con comprobantes.
 
-**Pagos simulados**: la tarjeta `4242 4242 4242 4242` (cualquier fecha futura y CVV) se aprueba y
-una terminada en `0002` se rechaza. En Yape y Plin cualquier código de 6 dígitos se aprueba,
+**Pagos simulados**: se aprueba cualquier tarjeta de 16 dígitos con titular, vencimiento MM/AA
+no vencido y CVV de 3 dígitos. En Yape y Plin cualquier código de 6 dígitos se aprueba,
 salvo `000000`.
 
 ## Variables de entorno

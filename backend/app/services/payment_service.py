@@ -1,8 +1,7 @@
 """Pasarela de pagos SIMULADA. No mueve dinero real ni almacena datos sensibles.
 
-Tarjetas de prueba (pago online):
-- cualquier número válido por Luhn se aprueba (p. ej. 4242 4242 4242 4242);
-- un número terminado en 0002 simula un rechazo del emisor (p. ej. 4000 0000 0000 0002).
+Pago online: se acepta cualquier número de 16 dígitos con titular, vencimiento MM/AA no vencido y
+CVV de 3 dígitos. Solo se registran la marca y los últimos 4 dígitos (nunca el número ni el CVV).
 Yape/Plin: el código de aprobación de 6 dígitos "000000" simula un rechazo.
 """
 
@@ -25,18 +24,6 @@ class PaymentResult:
     reference: str | None
     payer_detail: str | None
     change_due: Decimal | None = None
-
-
-def _luhn_ok(number: str) -> bool:
-    total, parity = 0, len(number) % 2
-    for i, ch in enumerate(number):
-        d = int(ch)
-        if i % 2 == parity:
-            d *= 2
-            if d > 9:
-                d -= 9
-        total += d
-    return total % 10 == 0
 
 
 def _brand(number: str) -> str:
@@ -64,8 +51,8 @@ def process(method: str, amount: Decimal, details: PaymentDetailsIn) -> PaymentR
     if method == PM_ONLINE:
         number = re.sub(r"[\s-]", "", details.card_number or "")
         errors = {}
-        if not re.fullmatch(r"\d{13,19}", number) or not _luhn_ok(number):
-            errors["payment.card_number"] = "Número de tarjeta inválido."
+        if not re.fullmatch(r"\d{16}", number):
+            errors["payment.card_number"] = "El número de tarjeta debe tener 16 dígitos."
         if not details.card_holder:
             errors["payment.card_holder"] = "Ingresa el nombre del titular."
         m = re.fullmatch(r"(\d{2})/(\d{2})", (details.card_expiry or "").strip())
@@ -76,12 +63,10 @@ def process(method: str, amount: Decimal, details: PaymentDetailsIn) -> PaymentR
             today = now_local()
             if (year, month) < (today.year, today.month):
                 errors["payment.card_expiry"] = "La tarjeta está vencida."
-        if not re.fullmatch(r"\d{3,4}", details.card_cvv or ""):
-            errors["payment.card_cvv"] = "CVV inválido."
+        if not re.fullmatch(r"\d{3}", details.card_cvv or ""):
+            errors["payment.card_cvv"] = "El CVV debe tener 3 dígitos."
         if errors:
             raise BadRequest(next(iter(errors.values())), code="payment_validation", fields=errors)
-        if number.endswith("0002"):
-            raise _declined("Pago rechazado por el banco emisor (simulación). Prueba con otra tarjeta.")
         return PaymentResult(True, False, _reference("ONL"), f"{_brand(number)} •••• {number[-4:]}")
 
     if method in (PM_YAPE, PM_PLIN):

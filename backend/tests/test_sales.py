@@ -64,18 +64,44 @@ def test_checkout_online_card(cliente, admin, outbox):
     assert mv[0]["sale_id"] == sale["id"] and mv[0]["quantity"] == -2
 
 
-def test_card_declined_creates_nothing(cliente, admin):
+def test_any_16_digit_card_is_accepted(cliente):
+    """Pago simulado: sin Luhn ni números "de rechazo"; basta con 16 dígitos."""
     cliente.post("/api/cart/items", {"product_id": 1, "quantity": 1})
-    r = cliente.post("/api/cart/checkout", {"payment_method": "ONLINE", "payment": {**CARD, "card_number": "4000000000000002"}})
-    assert r.status_code == 402
+    r = cliente.post("/api/cart/checkout", {"payment_method": "ONLINE",
+                                            "payment": {**CARD, "card_number": "1234-5678 9012 0002"}})
+    assert r.status_code == 201, r.text
+    assert r.json()["payments"][0]["payer_detail"] == "Tarjeta •••• 0002"  # marca no reconocida
+
+
+def test_mastercard_brand_is_recorded(cliente):
+    cliente.post("/api/cart/items", {"product_id": 1, "quantity": 1})
+    r = cliente.post("/api/cart/checkout", {"payment_method": "ONLINE", "payment": {**CARD, "card_number": "5500000000000004"}})
+    assert r.status_code == 201 and r.json()["payments"][0]["payer_detail"] == "Mastercard •••• 0004"
+
+
+def test_invalid_card_creates_nothing(cliente, admin):
+    cliente.post("/api/cart/items", {"product_id": 1, "quantity": 1})
+    r = cliente.post("/api/cart/checkout", {"payment_method": "ONLINE", "payment": {**CARD, "card_expiry": "01/20"}})
+    assert r.status_code == 400 and r.json()["error"]["fields"]["payment.card_expiry"] == "La tarjeta está vencida."
     assert stock(admin, 1) == 12 and cliente.get("/api/cart").json()["item_count"] == 1
     assert cliente.get("/api/sales").json()["total"] == 2  # solo las ventas históricas del seed
 
 
 def test_payment_validation_errors(cliente):
     cliente.post("/api/cart/items", {"product_id": 1, "quantity": 1})
-    r = cliente.post("/api/cart/checkout", {"payment_method": "ONLINE", "payment": {**CARD, "card_number": "1234"}})
-    assert r.status_code == 400 and "payment.card_number" in r.json()["error"]["fields"]
+    for bad in ("1234", "4242 4242 4242 424", "4242 4242 4242 42424", "4242 4242 4242 424a"):
+        r = cliente.post("/api/cart/checkout", {"payment_method": "ONLINE", "payment": {**CARD, "card_number": bad}})
+        assert r.status_code == 400 and "payment.card_number" in r.json()["error"]["fields"], bad
+    for bad in ("12", "1234", "12a"):
+        r = cliente.post("/api/cart/checkout", {"payment_method": "ONLINE", "payment": {**CARD, "card_cvv": bad}})
+        assert r.status_code in (400, 422), bad
+        if r.status_code == 400:
+            assert "payment.card_cvv" in r.json()["error"]["fields"], bad
+    for bad in ("13/30", "00/30", "1230", "12-30"):
+        r = cliente.post("/api/cart/checkout", {"payment_method": "ONLINE", "payment": {**CARD, "card_expiry": bad}})
+        assert r.status_code == 400 and "payment.card_expiry" in r.json()["error"]["fields"], bad
+    r = cliente.post("/api/cart/checkout", {"payment_method": "ONLINE", "payment": {**CARD, "card_holder": None}})
+    assert r.status_code == 400 and "payment.card_holder" in r.json()["error"]["fields"]
     r = cliente.post("/api/cart/checkout", {"payment_method": "YAPE", "payment": {"wallet_phone": "987654321", "approval_code": "12"}})
     assert r.status_code == 400 and "payment.approval_code" in r.json()["error"]["fields"]
 
@@ -173,6 +199,56 @@ def test_charge_attended_appointment(caja, admin):
     assert again.status_code == 409
     pending = caja.get("/api/appointments", params={"status": "PENDIENTE"}).json()["items"][0]
     assert caja.post(f"/api/appointments/{pending['id']}/charge", {"payment_method": "EFECTIVO"}).status_code == 409
+
+
+def _unpaid_attended(api):
+    return next(a for a in api.get("/api/appointments", params={"status": "ATENDIDA"}).json()["items"] if a["can_charge"])
+
+
+def _receipts(sale_id):
+    with engine.begin() as conn:
+        return conn.execute(text("SELECT count(*) FROM receipts WHERE sale_id = :s"), {"s": sale_id}).scalar_one()
+
+
+def test_charge_appointment_with_products_single_sale(caja, admin, outbox):
+    unpaid = _unpaid_attended(caja)
+    sales_before = caja.get("/api/sales").json()["total"]
+    r = caja.post(f"/api/appointments/{unpaid['id']}/charge",
+                  {"payment_method": "ONLINE", "payment": CARD, "items": [{"product_id": 1, "quantity": 2}]})
+    assert r.status_code == 201, r.text
+    sale = r.json()
+    types = sorted(i["item_type"] for i in sale["items"])
+    assert types == ["PRODUCTO", "SERVICIO"]
+    assert float(sale["total"]) == float(unpaid["price"]) + 2 * 18.00  # servicio + 2 × S/ 18.00
+    assert len(sale["payments"]) == 1 and float(sale["payments"][0]["amount"]) == float(sale["total"])
+    assert caja.get("/api/sales").json()["total"] == sales_before + 1  # una sola venta
+    assert _receipts(sale["id"]) == 1  # un solo comprobante
+    assert stock(admin, 1) == 10  # stock descontado (12 → 10)
+    mv = admin.get("/api/inventory/movements", params={"product_id": 1, "movement_type": "VENTA"}).json()
+    assert mv[0]["sale_id"] == sale["id"] and mv[0]["quantity"] == -2
+    assert caja.get(f"/api/appointments/{unpaid['id']}").json()["sale_id"] == sale["id"]
+    mails = [e for e in outbox if "Comprobante" in e.subject]
+    assert len(mails) == 1  # el comprobante se envía una sola vez
+    assert "× 2" in mails[0].html and unpaid["service"]["name"] in mails[0].html  # con todas las líneas
+    assert caja.get(f"/api/sales/{sale['id']}/receipt.pdf").content.startswith(b"%PDF")
+
+
+def test_charge_appointment_without_stock_creates_nothing(caja, admin):
+    unpaid = _unpaid_attended(caja)
+    sales_before = caja.get("/api/sales").json()["total"]
+    r = caja.post(f"/api/appointments/{unpaid['id']}/charge",
+                  {"payment_method": "EFECTIVO", "items": [{"product_id": 1, "quantity": 1}, {"product_id": 3, "quantity": 3}]})
+    assert r.status_code == 409 and "quedan 2 unidades" in r.json()["error"]["message"]
+    assert caja.get("/api/sales").json()["total"] == sales_before  # no se creó la venta
+    assert caja.get(f"/api/appointments/{unpaid['id']}").json()["sale_id"] is None  # la cita sigue por cobrar
+    assert stock(admin, 1) == 12 and stock(admin, 3) == 2
+
+
+def test_charge_appointment_rejects_duplicate_products(caja):
+    unpaid = _unpaid_attended(caja)
+    r = caja.post(f"/api/appointments/{unpaid['id']}/charge",
+                  {"payment_method": "EFECTIVO", "items": [{"product_id": 1, "quantity": 1}, {"product_id": 1, "quantity": 2}]})
+    assert r.status_code == 422
 
 
 def test_sales_filters(caja):

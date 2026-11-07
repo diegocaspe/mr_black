@@ -91,6 +91,15 @@ class CounterSaleIn(InputModel):
 class ChargeAppointmentIn(InputModel):
     payment_method: MethodCode
     payment: PaymentDetailsIn = Field(default_factory=PaymentDetailsIn)
+    # Productos que el cliente compra junto con el servicio (misma venta y misma boleta).
+    items: list[CounterItemIn] = Field(default_factory=list, max_length=50)
+
+    @field_validator("items")
+    @classmethod
+    def unique_products(cls, v: list[CounterItemIn]):
+        if len({i.product_id for i in v}) != len(v):
+            raise ValueError("Cada producto debe aparecer una sola vez; ajusta la cantidad.")
+        return v
 
 
 class ConfirmPaymentIn(InputModel):

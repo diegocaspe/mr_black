@@ -163,14 +163,14 @@ export function paymentFields(method) {
   if (method === 'ONLINE') {
     return html`<div class="form-grid">
       <div class="field full"><label for="pay-card">Número de tarjeta</label>
-        <input id="pay-card" name="payment.card_number" class="input" inputmode="numeric" autocomplete="cc-number" maxlength="23" placeholder="4242 4242 4242 4242"></div>
+        <input id="pay-card" name="payment.card_number" class="input" inputmode="numeric" autocomplete="cc-number" maxlength="19" placeholder="0000 0000 0000 0000"></div>
       <div class="field full"><label for="pay-holder">Titular</label>
         <input id="pay-holder" name="payment.card_holder" class="input" autocomplete="cc-name" maxlength="60"></div>
       <div class="field"><label for="pay-exp">Vencimiento (MM/AA)</label>
-        <input id="pay-exp" name="payment.card_expiry" class="input" inputmode="numeric" autocomplete="cc-exp" maxlength="5" placeholder="12/28"></div>
+        <input id="pay-exp" name="payment.card_expiry" class="input" inputmode="numeric" autocomplete="cc-exp" maxlength="5" placeholder="MM/AA"></div>
       <div class="field"><label for="pay-cvv">CVV</label>
-        <input id="pay-cvv" name="payment.card_cvv" class="input" inputmode="numeric" autocomplete="cc-csc" maxlength="4" type="password"></div>
-      <p class="xs faint full"><i class="fa-solid fa-flask" aria-hidden="true"></i> Simulación: la tarjeta 4242 4242 4242 4242 se aprueba y una terminada en 0002 se rechaza. No se guarda el número completo ni el CVV.</p>
+        <input id="pay-cvv" name="payment.card_cvv" class="input" inputmode="numeric" autocomplete="cc-csc" maxlength="3" type="password"></div>
+      <p class="xs faint full"><i class="fa-solid fa-flask" aria-hidden="true"></i> Pago simulado: no se realiza ningún cobro real y no se guarda el número completo ni el CVV.</p>
     </div>`;
   }
   if (method === 'YAPE' || method === 'PLIN') {
@@ -193,13 +193,63 @@ export function paymentFields(method) {
   return '';
 }
 
+function expiryError(v) {
+  const m = /^(0[1-9]|1[0-2])\/(\d{2})$/.exec(v.trim());
+  if (!m) return 'Usa el formato MM/AA (mes 01–12).';
+  const now = new Date();
+  const year = 2000 + Number(m[2]);
+  const month = Number(m[1]);
+  return year < now.getFullYear() || (year === now.getFullYear() && month < now.getMonth() + 1) ? 'La tarjeta está vencida.' : null;
+}
+
+/**
+ * Formatea un campo mientras se escribe, pega o borra: deja solo dígitos (hasta `max`), los agrupa
+ * con `format` y mantiene el cursor detrás del mismo número de dígitos.
+ */
+function maskDigits(input, max, format) {
+  let prevDigits = input.value.replace(/\D/g, '');
+  input.addEventListener('input', (e) => {
+    const caret = input.selectionStart ?? input.value.length;
+    let digitsBefore = input.value.slice(0, caret).replace(/\D/g, '').length;
+    let digits = input.value.replace(/\D/g, '');
+    // Retroceso sobre un separador (espacio o "/"): se borra el dígito anterior.
+    if (e.inputType === 'deleteContentBackward' && digits === prevDigits && digitsBefore > 0) {
+      digits = digits.slice(0, digitsBefore - 1) + digits.slice(digitsBefore);
+      digitsBefore -= 1;
+    }
+    digits = digits.slice(0, max);
+    prevDigits = digits;
+    const formatted = format(digits);
+    if (formatted === input.value) return;
+    input.value = formatted;
+    let pos = 0;
+    for (let seen = 0; pos < formatted.length && seen < digitsBefore; pos += 1) {
+      if (/\d/.test(formatted[pos])) seen += 1;
+    }
+    input.setSelectionRange(pos, pos);
+  });
+}
+
+const groupsOf4 = (d) => d.replace(/(\d{4})(?=\d)/g, '$1 ');
+// La "/" aparece al escribir el tercer dígito (MM/A…), así borrar nunca se queda trabado en ella.
+const monthYear = (d) => (d.length > 2 ? `${d.slice(0, 2)}/${d.slice(2)}` : d);
+
+function attachCardMasks(root) {
+  const card = root.querySelector('[name="payment.card_number"]');
+  const exp = root.querySelector('[name="payment.card_expiry"]');
+  const cvv = root.querySelector('[name="payment.card_cvv"]');
+  if (card) maskDigits(card, 16, groupsOf4);
+  if (exp) maskDigits(exp, 4, monthYear);
+  if (cvv) maskDigits(cvv, 3, (d) => d);
+}
+
 export function paymentSchema(method) {
   if (method === 'ONLINE') {
     return {
-      'payment.card_number': [(v) => (/^[\d\s-]{13,23}$/.test(v.trim()) ? null : 'Número de tarjeta inválido.')],
+      'payment.card_number': [(v) => (/^\d{16}$/.test(v.replace(/\s/g, '')) ? null : 'El número de tarjeta debe tener 16 dígitos.')],
       'payment.card_holder': [rules.personName],
-      'payment.card_expiry': [(v) => (/^(0[1-9]|1[0-2])\/\d{2}$/.test(v.trim()) ? null : 'Usa el formato MM/AA.')],
-      'payment.card_cvv': [(v) => (/^\d{3,4}$/.test(v) ? null : 'CVV inválido.')],
+      'payment.card_expiry': [expiryError],
+      'payment.card_cvv': [(v) => (/^\d{3}$/.test(v) ? null : 'El CVV debe tener 3 dígitos.')],
     };
   }
   if (method === 'YAPE' || method === 'PLIN') {
@@ -238,6 +288,7 @@ export function mountPaymentSelector(form, methods, { name = 'payment_method' } 
     render(fields, paymentFields(method));
     const phone = fields.querySelector('[name="payment.wallet_phone"]');
     if (phone) attachPhoneNormalizer(phone);
+    attachCardMasks(fields);
     liveValidate(form, paymentSchema(method));
   };
   box.addEventListener('change', update);

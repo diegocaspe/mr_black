@@ -85,4 +85,5 @@ def reschedule(appointment_id: int, data: RescheduleIn, tasks: BackgroundTasks, 
 @router.post("/{appointment_id}/charge", response_model=SaleOut, status_code=201, tags=["Ventas"])
 def charge(appointment_id: int, data: ChargeAppointmentIn, tasks: BackgroundTasks, db: Session = Depends(get_db),
            actor: User = Depends(staff), meta: RequestMeta = Depends(get_request_meta)):
-    return sale_service.charge_appointment(db, appointment_id, data.payment_method, data.payment, actor, meta, tasks)
+    return sale_service.charge_appointment(db, appointment_id, data.payment_method, data.payment, actor, meta, tasks,
+                                           items=data.items)

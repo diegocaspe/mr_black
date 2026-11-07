@@ -97,25 +97,85 @@ export async function openAppointmentDetail(id, refresh) {
 
 export async function openCharge(id, refresh) {
   try {
-    const [a, methods] = await Promise.all([api.get(`/appointments/${id}`), api.get('/payments/methods')]);
+    const [a, methods, productsAll] = await Promise.all([
+      api.get(`/appointments/${id}`), api.get('/payments/methods'), api.get('/admin/products', { active: true }),
+    ]);
+    const products = productsAll.filter((p) => p.is_active && p.stock > 0);
+    const extras = []; // { product_id, quantity }: productos que se cobran en la misma boleta
+    const byId = (pid) => products.find((p) => p.id === Number(pid));
     const form = document.createElement('form');
     form.noValidate = true;
     render(form, html`<div class="panel panel-pad" style="background:#191919">
         <div class="summary-row"><span>${a.service.name} · ${a.barber.full_name}</span><b>${money(a.price)}</b></div>
         <div class="summary-row"><span>Cliente</span><b>${a.client.full_name}</b></div>
-        <div class="summary-row"><span class="bold" style="color:#fff">Total</span><b class="gold">${money(a.price)}</b></div></div>
+        <div data-extra-lines></div>
+        <div class="summary-row"><span class="bold" style="color:#fff">Total</span><b class="gold" data-total>${money(a.price)}</b></div></div>
+      <fieldset class="mt-5" style="border:0;padding:0;margin-inline:0"><legend class="label mb-2">Agregar productos</legend>
+        ${products.length ? html`<div class="flex gap-2 wrap">
+          <select name="extra_product" class="select grow" aria-label="Producto" style="min-width:180px"><option value="">Seleccionar producto…</option>
+            ${products.map((p) => html`<option value="${p.id}">${p.name} · ${money(p.price)} · stock ${p.stock}</option>`)}</select>
+          <input name="extra_qty" type="number" class="input" min="1" value="1" inputmode="numeric" aria-label="Cantidad" style="width:90px">
+          <button type="button" class="btn btn-dark" data-add-extra><i class="fa-solid fa-plus" aria-hidden="true"></i> Agregar</button></div>
+          <p class="field-hint" data-extra-hint></p>`
+          : html`<p class="small muted">No hay productos con stock disponible.</p>`}
+      </fieldset>
       <div class="mt-5" data-pay-methods></div><div class="pay-panel" data-pay-fields></div>
       <div class="form-actions"><button type="button" class="btn btn-dark" data-close>Cancelar</button>
         <button type="submit" class="btn btn-gold"><i class="fa-solid fa-cash-register" aria-hidden="true"></i> Registrar cobro</button></div>`);
     const m = openModal({ title: 'Cobrar servicio', kicker: `Cita #${a.id}`, body: form, size: 'lg' });
     mountPaymentSelector(form, methods.filter((x) => x.counter_allowed));
+
+    const hint = form.querySelector('[data-extra-hint]');
+    const say = (msg) => { if (hint) hint.textContent = msg; };
+    function drawExtras() {
+      const total = Number(a.price) + extras.reduce((s, l) => s + Number(byId(l.product_id).price) * l.quantity, 0);
+      render(form.querySelector('[data-extra-lines]'), html`${extras.map((l) => { const p = byId(l.product_id); return html`
+        <div class="summary-row" style="align-items:center;gap:8px"><span class="grow">${p.name}<br><span class="xs faint">${money(p.price)} c/u</span></span>
+          <input type="number" class="input" style="width:74px" min="1" max="${p.stock}" value="${l.quantity}" data-extra-qty="${p.id}" aria-label="Cantidad de ${p.name}">
+          <b style="min-width:84px;text-align:right">${money(Number(p.price) * l.quantity)}</b>
+          <button type="button" class="btn btn-ghost btn-xs" data-extra-remove="${p.id}" aria-label="Quitar ${p.name}"><i class="fa-solid fa-trash" aria-hidden="true"></i></button></div>`; })}`);
+      form.querySelector('[data-total]').textContent = money(total);
+    }
+    form.querySelector('[data-add-extra]')?.addEventListener('click', () => {
+      const p = byId(form.elements.extra_product.value);
+      const qty = Number(form.elements.extra_qty.value);
+      if (!p) { say('Selecciona un producto.'); return; }
+      if (!Number.isInteger(qty) || qty < 1) { say('La cantidad debe ser un entero mayor a 0.'); return; }
+      const line = extras.find((l) => l.product_id === p.id);
+      const wanted = (line?.quantity || 0) + qty;
+      if (wanted > p.stock) { say(`Stock insuficiente: quedan ${p.stock} unidad(es) de ${p.name}.`); return; }
+      if (line) line.quantity = wanted; else extras.push({ product_id: p.id, quantity: qty });
+      form.elements.extra_qty.value = '1';
+      form.elements.extra_product.value = '';
+      say('');
+      drawExtras();
+    });
+    form.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-extra-remove]');
+      if (!b) return;
+      extras.splice(extras.findIndex((l) => l.product_id === Number(b.dataset.extraRemove)), 1);
+      drawExtras();
+    });
+    form.addEventListener('change', (e) => {
+      const input = e.target.closest('[data-extra-qty]');
+      if (!input) return;
+      const line = extras.find((l) => l.product_id === Number(input.dataset.extraQty));
+      const p = byId(line.product_id);
+      const qty = Math.trunc(Number(input.value));
+      line.quantity = Math.min(Math.max(1, Number.isFinite(qty) ? qty : 1), p.stock);
+      say(qty > p.stock ? `Stock insuficiente: quedan ${p.stock} unidad(es) de ${p.name}.` : '');
+      drawExtras();
+    });
+
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const method = form.elements.payment_method.value;
       if (!validateForm(form, paymentSchema(method))) return;
       try {
         const sale = await submitWith(form, form.querySelector('[type=submit]'),
-          () => api.post(`/appointments/${a.id}/charge`, { payment_method: method, payment: paymentPayload(formValues(form)) }));
+          () => api.post(`/appointments/${a.id}/charge`, {
+            payment_method: method, payment: paymentPayload(formValues(form)), items: extras.map((l) => ({ ...l })),
+          }));
         m.close();
         toast(`Cobro registrado. Comprobante ${sale.receipt_code}.`);
         openSaleDetail(sale.id, refresh, sale.change_due);

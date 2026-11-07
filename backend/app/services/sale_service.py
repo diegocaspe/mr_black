@@ -299,7 +299,8 @@ def counter_sale(db: Session, data, actor: User, meta: RequestMeta, tasks: Backg
 
 
 def charge_appointment(db: Session, appointment_id: int, method_code: str, details: PaymentDetailsIn, actor: User,
-                       meta: RequestMeta, tasks: BackgroundTasks) -> SaleOut:
+                       meta: RequestMeta, tasks: BackgroundTasks, items=()) -> SaleOut:
+    """Cobra el servicio y, opcionalmente, productos extra: una sola venta, un pago y un comprobante."""
     a = db.scalars(
         select(Appointment).where(Appointment.id == appointment_id).with_for_update(of=Appointment)
         .execution_options(populate_existing=True)
@@ -313,13 +314,23 @@ def charge_appointment(db: Session, appointment_id: int, method_code: str, detai
     method = _method(db, method_code, CHANNEL_MOSTRADOR)
     lines = [{"service_id": a.service_id, "appointment_id": a.id,
               "description": f"{a.service.name} · {a.barber.full_name}", "quantity": 1, "unit_price": a.price}]
+    quantities = {i.product_id: i.quantity for i in items}
+    if quantities:
+        products = _lock_products(db, quantities)  # activos y con stock; si no, no se registra nada
+        lines += [
+            {"product": products[pid], "product_id": pid, "description": products[pid].name,
+             "quantity": qty, "unit_price": products[pid].price}
+            for pid, qty in quantities.items()
+        ]
     sale, result = _create_sale(db, client=a.client, channel=CHANNEL_MOSTRADOR, method=method, lines=lines,
                                 details=details, actor=actor)
     a.sale_id = sale.id
-    audit(db, actor.id, "CITA_COBRADA", "appointment", a.id, {"venta": sale.id, "total": str(sale.total), "metodo": method.code}, meta)
+    audit(db, actor.id, "CITA_COBRADA", "appointment", a.id,
+          {"venta": sale.id, "total": str(sale.total), "metodo": method.code, "productos": len(quantities)}, meta)
     if a.client.user_id:
+        extra = f" + {len(quantities)} producto(s)" if quantities else ""
         notify(db, a.client.user_id, "PAGO_PROCESADO", "Pago de servicio registrado",
-               f"{a.service.name}: S/ {sale.total:.2f} pagado con {method.name}.", f"#/compras/{sale.id}")
+               f"{a.service.name}{extra}: S/ {sale.total:.2f} pagado con {method.name}.", f"#/compras/{sale.id}")
     db.commit()
     out = sale_out(db, sale.id, result.change_due)
     _queue_receipt_email(tasks, sale.id)
