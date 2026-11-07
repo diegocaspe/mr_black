@@ -280,6 +280,14 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .th-sort i { opacity: 0.4; }
 .th-sort[aria-sort] i { opacity: 1; color: var(--gold); }
 .cell-actions { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
+/* En una tabla, la celda de acciones debe seguir siendo celda (con flex pierde la altura y el borde
+   de la fila y las líneas no cuadran). Los botones van en línea a la derecha. En móvil, la regla
+   `.table.responsive td` (más específica) la sigue mostrando como flex en la tarjeta. */
+td.cell-actions { display: table-cell; vertical-align: middle; text-align: right; }
+@media (min-width: 769px) {
+  /* el espacio en blanco entre botones (~3px) + 3px de margen ≈ 6px; 3px arriba/abajo si saltan de línea */
+  td.cell-actions > * { margin: 3px 0 3px 3px; vertical-align: middle; }
+}
 .empty { padding: 52px 20px; text-align: center; color: var(--muted); }
 .empty i { font-size: 1.8rem; color: var(--gold); opacity: 0.55; display: block; margin-bottom: 14px; }
 
