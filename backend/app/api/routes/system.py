@@ -146,6 +146,8 @@ class BookingIn(InputModel):
     min_notice_minutes: int = Field(ge=0, le=1440)
     max_days_ahead: int = Field(ge=1, le=365)
     client_cancel_min_hours: int = Field(ge=0, le=168)
+    # Opcional: si no se envía se conserva el valor guardado.
+    reschedule_min_hours: int | None = Field(default=None, ge=0, le=168)
 
 
 class SettingsOut(BaseModel):
@@ -178,8 +180,9 @@ def put_business(data: BusinessIn, db: Session = Depends(get_db), actor: User = 
 @router.put("/settings/booking", tags=["Configuración"])
 def put_booking(data: BookingIn, db: Session = Depends(get_db), actor: User = Depends(admin_only),
                 meta: RequestMeta = Depends(get_request_meta)):
-    value = set_setting(db, "booking", data.model_dump(), actor.id)
-    audit(db, actor.id, "CONFIGURACION_EDITADA", "settings", "booking", data.model_dump(), meta)
+    payload = data.model_dump(exclude_none=True)
+    value = set_setting(db, "booking", payload, actor.id)
+    audit(db, actor.id, "CONFIGURACION_EDITADA", "settings", "booking", payload, meta)
     db.commit()
     return value
 

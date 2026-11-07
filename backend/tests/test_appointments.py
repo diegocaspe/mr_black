@@ -272,6 +272,56 @@ def test_failed_reschedule_keeps_original(cliente, cliente2, wed):
     assert a["status"] == "PENDIENTE" and ("T10:00:00" in a["start_at"] or "T15:00:00" in a["start_at"])
 
 
+def _move_start(aid, minutes_from_now, duration=45):
+    """Lleva la cita a `minutes_from_now` minutos desde ahora (las reglas de reserva no lo permitirían)."""
+    with engine.begin() as conn:
+        conn.execute(text("UPDATE appointments SET start_at = now() + make_interval(mins => :m), "
+                          "end_at = now() + make_interval(mins => :m + :d) WHERE id = :id"),
+                     {"m": minutes_from_now, "d": duration, "id": aid})
+
+
+@pytest.mark.parametrize("role", ["cliente", "caja", "admin"])
+def test_reschedule_allowed_more_than_one_hour_before(request, cliente, role, wed):
+    aid = _new(cliente, wed)
+    api = request.getfixturevalue(role)
+    assert api.get(f"/api/appointments/{aid}").json()["can_reschedule"] is True
+    r = api.post(f"/api/appointments/{aid}/reschedule", {"start_at": slot(wed, "16:00")})
+    assert r.status_code == 200, r.text
+
+
+@pytest.mark.parametrize("role", ["cliente", "caja", "admin"])
+def test_reschedule_rejected_less_than_one_hour_before(request, cliente, role, wed):
+    aid = _new(cliente, wed)
+    _move_start(aid, 30)
+    api = request.getfixturevalue(role)
+    assert api.get(f"/api/appointments/{aid}").json()["can_reschedule"] is False
+    r = api.post(f"/api/appointments/{aid}/reschedule", {"start_at": slot(wed, "16:00")})
+    assert r.status_code == 400
+    assert r.json()["error"]["code"] == "too_late"
+    assert "1 hora antes" in r.json()["error"]["message"]
+
+
+def test_reschedule_window_is_separate_from_cancel_window(cliente, wed):
+    """A 90 min el cliente ya no puede cancelar (límite de 2 h) pero sí reprogramar (límite de 1 h)."""
+    aid = _new(cliente, wed)
+    _move_start(aid, 90)
+    a = cliente.get(f"/api/appointments/{aid}").json()
+    assert a["can_reschedule"] is True
+    assert cliente.post(f"/api/appointments/{aid}/cancel", {"reason": "Viaje"}).json()["error"]["code"] == "too_late"
+
+
+def test_reschedule_window_is_configurable(admin, cliente, wed):
+    aid = _new(cliente, wed)
+    _move_start(aid, 150)
+    assert cliente.get(f"/api/appointments/{aid}").json()["can_reschedule"] is True
+    rules = {"slot_interval_minutes": 30, "min_notice_minutes": 15, "max_days_ahead": 60, "client_cancel_min_hours": 2}
+    assert admin.put("/api/settings/booking", {**rules, "reschedule_min_hours": 169}).status_code == 422
+    assert admin.put("/api/settings/booking", {**rules, "reschedule_min_hours": 3}).json()["reschedule_min_hours"] == 3
+    assert cliente.get(f"/api/appointments/{aid}").json()["can_reschedule"] is False
+    # Si no se envía el campo se conserva el valor guardado.
+    assert admin.put("/api/settings/booking", rules).json()["reschedule_min_hours"] == 3
+
+
 def test_reschedule_final_status_rejected(caja):
     attended = caja.get("/api/appointments", params={"status": "ATENDIDA"}).json()["items"][0]["id"]
     assert caja.post(f"/api/appointments/{attended}/reschedule", {"start_at": slot(future_weekday(2), "10:00")}).status_code == 409
@@ -301,3 +351,19 @@ def test_filters_and_sorting(caja, wed):
     assert caja.get("/api/appointments", params={"date_from": "2026-05-10", "date_to": "2026-05-01"}).status_code == 400
     page = caja.get("/api/appointments", params={"page_size": 2, "page": 2}).json()
     assert page["page"] == 2 and len(page["items"]) <= 2
+
+
+def test_hide_attended_excludes_only_charged(caja):
+    every = caja.get("/api/appointments", params={"page_size": 100}).json()
+    charged = [a for a in every["items"] if a["status"] == "ATENDIDA" and a["sale_id"]]
+    pending_charge = [a for a in every["items"] if a["status"] == "ATENDIDA" and not a["sale_id"]]
+    assert charged and pending_charge  # el seed tiene atendidas cobradas y una por cobrar
+
+    hidden = caja.get("/api/appointments", params={"page_size": 100, "hide_attended": True}).json()
+    ids = {a["id"] for a in hidden["items"]}
+    assert hidden["total"] == every["total"] - len(charged)  # el total cuadra con la paginación
+    assert not ids & {a["id"] for a in charged}
+    assert {a["id"] for a in pending_charge} <= ids  # las "Por cobrar" siguen visibles
+    # Filtrar por Atendida ignora el interruptor.
+    attended = caja.get("/api/appointments", params={"status": "ATENDIDA", "hide_attended": True}).json()
+    assert attended["total"] == len(charged) + len(pending_charge)

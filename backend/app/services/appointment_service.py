@@ -4,7 +4,7 @@ from datetime import UTC, date, datetime, timedelta
 from fastapi import BackgroundTasks
 from sqlalchemy import asc, desc, func, or_, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, object_session
 
 from app.core.config import get_settings
 from app.core.database import SessionLocal
@@ -31,7 +31,7 @@ from app.schemas.appointment import AppointmentCreateIn, AppointmentDetailOut, A
 from app.services.audit_service import audit
 from app.services.availability_service import assert_slot_available, resolve_bookable
 from app.services.notification_service import notify, notify_many, send_email_task
-from app.services.settings_service import get_setting
+from app.services.settings_service import DEFAULTS, get_setting
 
 logger = logging.getLogger("mrblack.appointments")
 
@@ -75,7 +75,10 @@ def to_out(a: Appointment, user: User, detail: bool = False) -> AppointmentOut:
     future = a.start_at > datetime.now(UTC)
     active = a.status in ACTIVE_STATUSES
     out.can_cancel = CANCELADA in out.allowed_transitions
-    out.can_reschedule = active and future and (user.role_code in (ROLE_CLIENTE, ROLE_ADMIN, ROLE_CAJA))
+    out.can_reschedule = (
+        active and future and (user.role_code in (ROLE_CLIENTE, ROLE_ADMIN, ROLE_CAJA))
+        and _within_reschedule_window(object_session(a), a)
+    )
     out.can_charge = _is_staff(user) and a.status == ATENDIDA and a.sale_id is None
     if user.role_code != ROLE_ADMIN:
         out.google_event_id = None
@@ -118,6 +121,7 @@ def list_appointments(
     client_q: str | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
+    hide_attended: bool = False,
     sort: str = "fecha",
     order: str = "desc",
     page: int = 1,
@@ -141,6 +145,9 @@ def list_appointments(
         stmt = stmt.where(Appointment.barber_id == user.barber.id)
     if status:
         stmt = stmt.where(Appointment.status == status)
+    elif hide_attended:
+        # Oculta las atendidas ya cobradas; las "por cobrar" (sin venta) siguen visibles para la caja.
+        stmt = stmt.where(or_(Appointment.status != ATENDIDA, Appointment.sale_id.is_(None)))
     if barber_id:
         stmt = stmt.where(Appointment.barber_id == barber_id)
     if client_id:
@@ -412,9 +419,20 @@ def _check_client_cancel_window(db: Session, a: Appointment) -> None:
     hours = int(get_setting(db, "booking")["client_cancel_min_hours"])
     if a.start_at - datetime.now(UTC) < timedelta(hours=hours):
         raise BadRequest(
-            f"Solo puedes cancelar o reprogramar con al menos {hours} hora(s) de anticipación. Comunícate con la barbería.",
+            f"Solo puedes cancelar con al menos {hours} hora(s) de anticipación. Comunícate con la barbería.",
             code="too_late",
         )
+
+
+def _reschedule_min_hours(db: Session | None) -> int:
+    if db is None:  # objeto fuera de sesión: se usa el valor por defecto
+        return int(DEFAULTS["booking"]["reschedule_min_hours"])
+    return int(get_setting(db, "booking")["reschedule_min_hours"])
+
+
+def _within_reschedule_window(db: Session | None, a: Appointment) -> bool:
+    """Una cita solo se reprograma si faltan al menos `reschedule_min_hours` (todos los roles)."""
+    return a.start_at - datetime.now(UTC) >= timedelta(hours=_reschedule_min_hours(db))
 
 
 def reschedule(
@@ -429,8 +447,12 @@ def reschedule(
         raise Conflict(f"La cita está {STATUS_LABEL[a.status].lower()} y no puede reprogramarse.", code="final_status")
     if a.start_at <= datetime.now(UTC):
         raise BadRequest("No se puede reprogramar una cita que ya comenzó o pasó.")
-    if user.role_code == ROLE_CLIENTE:
-        _check_client_cancel_window(db, a)
+    if not _within_reschedule_window(db, a):
+        hours = _reschedule_min_hours(db)
+        raise BadRequest(
+            f"Solo se puede reprogramar hasta {hours} hora{'' if hours == 1 else 's'} antes de la cita.",
+            code="too_late",
+        )
 
     barber_id = data.barber_id or a.barber_id
     barber, service = resolve_bookable(db, barber_id, a.service_id)

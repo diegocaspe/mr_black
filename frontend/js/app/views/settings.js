@@ -34,6 +34,7 @@ export default async function settingsView(root, { query }) {
           <div class="field"><label for="k-notice">Anticipación mínima (min)</label><input id="k-notice" name="min_notice_minutes" type="number" class="input" min="0" max="1440" value="${k.min_notice_minutes}"></div>
           <div class="field"><label for="k-days">Reservar hasta (días)</label><input id="k-days" name="max_days_ahead" type="number" class="input" min="1" max="365" value="${k.max_days_ahead}"></div>
           <div class="field"><label for="k-cancel">Cancelación del cliente (horas antes)</label><input id="k-cancel" name="client_cancel_min_hours" type="number" class="input" min="0" max="168" value="${k.client_cancel_min_hours}"></div>
+          <div class="field"><label for="k-resched">Reprogramación (horas antes)</label><input id="k-resched" name="reschedule_min_hours" type="number" class="input" min="0" max="168" value="${k.reschedule_min_hours ?? 1}"><p class="field-hint">Aplica a clientes, caja y administrador.</p></div>
         </div>
         <div class="form-actions"><button type="submit" class="btn btn-gold">Guardar</button></div></form>
       <section class="panel panel-pad span-2"><div class="flex justify-between items-start wrap gap-4">
@@ -67,6 +68,7 @@ export default async function settingsView(root, { query }) {
   const bookSchema = {
     slot_interval_minutes: [rules.intRange(5, 120, 'El intervalo')], min_notice_minutes: [rules.intRange(0, 1440, 'La anticipación')],
     max_days_ahead: [rules.intRange(1, 365, 'El máximo de días')], client_cancel_min_hours: [rules.intRange(0, 168, 'El límite')],
+    reschedule_min_hours: [rules.intRange(0, 168, 'El límite')],
   };
   book.addEventListener('submit', async (e) => {
     e.preventDefault();

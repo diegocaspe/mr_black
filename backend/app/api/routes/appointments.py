@@ -33,6 +33,7 @@ def list_appointments(
     client: str | None = Query(None, max_length=60, description="Nombre o teléfono del cliente"),
     date_from: date | None = None,
     date_to: date | None = None,
+    hide_attended: bool = Query(False, description="Excluye las citas atendidas que ya fueron cobradas"),
     sort: Literal["fecha", "cliente", "barbero", "servicio", "estado", "creada"] = "fecha",
     order: Literal["asc", "desc"] = "desc",
     page: int = Query(1, ge=1),
@@ -42,7 +43,7 @@ def list_appointments(
 ):
     items, total = appointment_service.list_appointments(
         db, user, status=status, barber_id=barber_id, client_id=client_id, client_q=client, date_from=date_from,
-        date_to=date_to, sort=sort, order=order, page=page, page_size=page_size,
+        date_to=date_to, hide_attended=hide_attended, sort=sort, order=order, page=page, page_size=page_size,
     )
     return Page(items=[appointment_service.to_out(a, user) for a in items], total=total, page=page, page_size=page_size)
 

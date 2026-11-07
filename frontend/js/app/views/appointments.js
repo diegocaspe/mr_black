@@ -10,7 +10,7 @@ import { openClientForm } from './clients.js';
 export default async function appointmentsView(root) {
   const [services, barbers] = await Promise.all([api.get('/services'), api.get('/barbers/admin')]);
   let clients = await api.get('/clients');
-  const state = { status: '', barber_id: '', client: '', date_from: '', date_to: '', sort: 'fecha', order: 'desc', page: 1, page_size: 15 };
+  const state = { status: '', barber_id: '', client: '', date_from: '', date_to: '', hide_attended: true, sort: 'fecha', order: 'desc', page: 1, page_size: 15 };
 
   render(root, html`
     <div class="page-head"><div><h2>Citas</h2><p>Registra citas, gestiona estados y cobra los servicios atendidos.</p></div></div>
@@ -46,6 +46,7 @@ export default async function appointmentsView(root) {
           <div class="field"><label for="f-client">Cliente</label><input id="f-client" name="client" class="input" type="search" placeholder="Nombre o teléfono" maxlength="60"></div>
           <div class="field"><label for="f-from">Desde</label><input id="f-from" name="date_from" type="date" class="input" min="2000-01-01" max="2099-12-31"></div>
           <div class="field"><label for="f-to">Hasta</label><input id="f-to" name="date_to" type="date" class="input" min="2000-01-01" max="2099-12-31"></div>
+          <div class="field"><label class="switch" title="Las atendidas por cobrar siempre se muestran"><input type="checkbox" name="hide_attended" checked> <span>Ocultar atendidas</span></label></div>
           <div class="field"><button type="reset" class="btn btn-dark">Limpiar filtros</button></div>
         </form>
         <div id="appt-table"></div>
@@ -136,6 +137,8 @@ export default async function appointmentsView(root) {
     render(table, loading());
     try {
       const params = { ...state };
+      // Elegir "Atendida" en Estado muestra todas las atendidas (el servidor ignora el interruptor).
+      if (params.status === 'ATENDIDA') delete params.hide_attended;
       if (params.date_from && params.date_to && params.date_from > params.date_to) {
         render(table, emptyState('fa-calendar-xmark', 'La fecha "Desde" no puede ser posterior a "Hasta".'));
         return;

@@ -18,6 +18,7 @@ DEFAULTS: dict[str, dict] = {
         "min_notice_minutes": 15,
         "max_days_ahead": 60,
         "client_cancel_min_hours": 2,
+        "reschedule_min_hours": 1,  # aplica a todos los roles que reprograman
     },
     "inventory": {"default_min_stock": 3},
 }

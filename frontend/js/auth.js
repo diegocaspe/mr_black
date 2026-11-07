@@ -73,7 +73,7 @@ if (registerForm) {
         full_name: d.full_name, phone: d.phone, email: d.email.trim(), password: d.password, password_confirm: d.password_confirm,
       }));
       toast('Cuenta creada correctamente. ¡Bienvenido a Mr Black!');
-      location.replace(safeNext() || '/app.html#/reservar');
+      location.replace(safeNext() || '/index.html');
     } catch { /* errores mostrados por campo */ }
   });
 }
